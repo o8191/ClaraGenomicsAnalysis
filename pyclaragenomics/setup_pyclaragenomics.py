@@ -11,25 +11,8 @@
 #
 
 import argparse
-import os.path
 import os
 import subprocess
-import shutil
-import glob
-
-
-def copy_all_files_in_directory(src, dest, file_ext="*.so"):
-    files_to_copy = glob.glob(os.path.join(src, file_ext))
-    if not files_to_copy:
-        raise RuntimeError("No {} files under {}".format(src, file_ext))
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
-    try:
-        for file in files_to_copy:
-            shutil.copy(file, dest)
-            print("{} was copied into {}".format(file, dest))
-    except (shutil.Error, PermissionError) as err:
-        print('Could not copy {}. Error: {}'.format(file, err))
-        raise err
 
 
 def parse_arguments():
@@ -41,7 +24,7 @@ def parse_arguments():
     parser.add_argument('--create_wheel_only',
                         required=False,
                         action='store_true',
-                        help="Create ")
+                        help="Creates a python wheel package from pyclaragenomics (no installation)")
     parser.add_argument('--develop',
                         required=False,
                         action='store_true',
@@ -97,28 +80,23 @@ class CMakeWrapper:
 
 def setup_python_binding(is_develop_mode, wheel_output_folder, pycga_dir, cga_install_dir):
     if wheel_output_folder:
-        # Copies shared libraries into clargenomics package
-        copy_all_files_in_directory(
-            os.path.join(cga_install_dir, "lib"),
-            os.path.join(pycga_dir, "claragenomics/shared_libs/"),
-        )
-        setup_command = ['python', 'setup.py', 'bdist_wheel', '-d', wheel_output_folder]
+        setup_command = [
+            'pip', 'wheel', '.',
+            '--global-option', 'sdist',
+            '--wheel-dir', wheel_output_folder, '--no-deps'
+        ]
         completion_message = \
             "A wheel file was create for pyclaragenomics under {}".format(wheel_output_folder)
-        cga_runtime_lib_dir = os.path.join('$ORIGIN', os.pardir, 'shared_libs')
     else:
         setup_command = ['pip', 'install'] + (['-e'] if is_develop_mode else []) + ["."]
         completion_message = \
             "pyclaragenomics was successfully setup in {} mode!".format(
                 "development" if args.develop else "installation")
-        cga_runtime_lib_dir = os.path.join(cga_install_dir, "lib")
 
     subprocess.check_call(setup_command,
                           env={
                               **os.environ,
-                              'PYCGA_DIR': pycga_dir,
-                              'CGA_INSTALL_DIR': cga_install_dir,
-                              'CGA_RUNTIME_LIB_DIR': cga_runtime_lib_dir
+                              'CGA_INSTALL_DIR': cga_install_dir
                           },
                           cwd=pycga_dir)
     print(completion_message)
@@ -138,7 +116,7 @@ if __name__ == "__main__":
     # Setup pyclaragenomics
     setup_python_binding(
         is_develop_mode=args.develop,
-        wheel_output_folder=os.path.realpath(args.build_output_folder) if args.create_wheel_only else None,
+        wheel_output_folder='pyclaragenomics_wheel/' if args.create_wheel_only else None,
         pycga_dir=current_dir,
         cga_install_dir=os.path.realpath(cga_installation_directory)
     )
